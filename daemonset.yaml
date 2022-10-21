@@ -1,0 +1,92 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ame-exporter
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ame-exporter-privileged-role
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs:     ['use']
+  resourceNames:
+  - privileged
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ame-exporter-privileged-role
+subjects:
+- kind: ServiceAccount
+  name: ame-exporter
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ame-exporter-privileged-role
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-ame-svc
+spec:
+  selector:
+    app.kubernetes.io/name: prometheus-ame
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prometheus-ame-deployment
+  labels:
+    app: prometheus-ame
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-ame
+  template:
+    metadata:
+      labels:
+        app: prometheus-ame
+    spec:
+      containers:
+      - name: prometheus-ame
+        image: kubejack/prometheus-ame:0.2
+        ports:
+        - containerPort: 80
+        env:
+        # Setting this environment variable to anything causes debug output to be
+        # logged to stdout
+        # - { name: DEBUG, value: 1 }
+
+        # How frequently to update. In seconds. If invalid, defaults to 30. Must be
+        # an integer, greater than 0 and less than or equal to 86400
+        - { name: UPDATE_PERIOD,     value: 30 }
+
+        # What files to watch and what patterns to match. Takes first match
+        # and the value that lands in the first submatch (which is the part enclosed
+        # in parenthis is what is returned for the metric
+        - { name: SEARCH_PATTERN,    value: ^MemTotal:\s+(\d+) kB$ }
+        - { name: FILE_NAME,         value: /proc/meminfo }
+        - { name: EXPORT_TYPE,       value: gauge }
+        - { name: EXPORT_NAME,       value: memtotal }
+
+        # You can append a prefix, numerically or otherwise, for more exports
+        - { name: SEARCH_PATTERN_01, value: ^MemFree:\s+(\d+) kB$ }
+        - { name: FILE_NAME_01,      value: /proc/meminfo }
+        - { name: EXPORT_TYPE_01,    value: gauge }
+        - { name: EXPORT_NAME_01,    value: memfree }
+
+        # Suffixes don't even need to be numeric, they just have to match
+        - { name: SEARCH_PATTERN_AA, value: ^MemAvailable:\s+(\d+) kB$ }
+        - { name: FILE_NAME_AA,      value: /proc/meminfo }
+        - { name: EXPORT_TYPE_AA,    value: gauge }
+        - { name: EXPORT_NAME_AA,    value: memavail }
