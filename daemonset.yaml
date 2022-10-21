@@ -59,7 +59,7 @@ spec:
     spec:
       containers:
       - name: prometheus-ame
-        image: kubejack/prometheus-ame:0.2
+        image: repository/prometheus-ame:0.2
         ports:
         - containerPort: 80
         env:
